@@ -19,3 +19,14 @@ main.o: main.c
 	
 clean:
 	rm *.o simpsh
+
+check:
+	./test.sh
+
+dist:
+	make check
+	mkdir lab1-albertliu-zixuanfan
+	cp main.c Makefile README.md test.sh ./lab1-albertliu-zixuanfan
+	tar -cvf lab1-albertliu-zixuanfan.tar.gz ./lab1-albertliu-zixuanfan
+	rm -r lab1-albertliu-zixuanfan
+	echo "make dist successful"
