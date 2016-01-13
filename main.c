@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <getopt.h>
 
-<<<<<<< HEAD
 //global variables
 int verbose_flag;
 
