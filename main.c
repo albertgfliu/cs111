@@ -37,13 +37,13 @@ int main(int argc, char **argv){
 		switch(curr_opt){
 			case 'r': //consume one file number
 				if(next_optind != curr_optind + 2)
-					printf("error: rdonly can only accept one argument\n"); //print to stderror?
+					fprintf(stderr, "error: rdonly can only accept one argument\n"); //print to stderror?
 				else
 					printf("rdonly with arg %s\n", optarg);
 				break;
 			case 'w': //consume one file number
 				if(next_optind != curr_optind + 2)
-					printf("error: wronly can only accept one argument\n"); //print to stderror?
+					fprintf(stderr, "error: wronly can only accept one argument\n"); //print to stderror?
 				else
 					printf("rdonly with args %s\n", optarg);
 				break;
@@ -52,12 +52,13 @@ int main(int argc, char **argv){
 			case 'p': //consumes two file numbers
 
 				if(next_optind != curr_optind + 1)
-					printf("error: pipe can not have any arguments");			
+					fprintf(stderr, "error: pipe can not have any arguments");			
 				printf("pipe\n");
 				printf("pipe with arg = %s\n", optarg);	
 				break;
 			case 'c': //special case, will take more work
-				//parse multiple arguments
+				if(next_optind < curr_optind + 5)
+					fprintf(stderr, "error: command needs more arguments");
 				printf("command with args %s\n", optarg);
 				break;
 		}
@@ -67,3 +68,4 @@ int main(int argc, char **argv){
 		next_optind = optind;
 	}
   return EXIT_SUCCESS;
+}

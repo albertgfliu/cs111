@@ -18,7 +18,7 @@ main.o: main.c
 	$(C) $(CFLAGS) main.c $(HDRLOC)
 	
 clean:
-	rm *.o simpsh
+	rm *.o simpsh *.tar.gz
 
 check:
 	./test.sh
