@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <getopt.h>
 
+<<<<<<< HEAD
 //global variables
 int verbose_flag;
 
@@ -67,4 +68,3 @@ int main(int argc, char **argv){
 		next_optind = optind;
 	}
   return EXIT_SUCCESS;
-}
