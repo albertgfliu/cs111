@@ -4,14 +4,19 @@
 #include <getopt.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/wait.h>
+
+#include <unistd.h>
 
 //defines
 #define TRUE 1
 #define FALSE 0
 
 //global variables
-int verbose_flag;
+static int verbose_flag;
+static int fd[1000];
 
 //helper function
 int isAnOption(char *cstring){
@@ -44,7 +49,7 @@ int main(int argc, char **argv){
 	int curr_optind;
 	int next_optind;
 
-	//insert check for if first argument is an option. otherwise there's a problem
+	int fd_ind = 0;
 
 	curr_optind = optind;
 	curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
@@ -57,27 +62,45 @@ int main(int argc, char **argv){
 			fprintf(stderr, "error: argument found before options and was ignored\n");
 		}
 		do {
+			//debug message
 			//printf("curr_optind = %d | curr_opt = %c | next_optind = %d\n", curr_optind, curr_opt, next_optind);
 			//printf("argv[%d] = %s\n", next_optind, argv[next_optind]);
+			//printf("optopt = %d\n", optopt);
 	
 			switch(curr_opt){
-				case 'r':
+				case 'r':{
 					if((next_optind != argc) && !isAnOption(argv[next_optind])){
-						fprintf(stderr, "error: rdonly can only accept one argument, further arguments to wronly were ignored\n");
+						fprintf(stderr, "error: rdonly can only accept one argument, further arguments to rdonly were ignored\n");
+					}
+					int temp_fd = open(optarg, O_RDONLY, 644);
+					if (temp_fd == -1){
+						fprintf(stderr, "error: could not open file \"%s\" for read\n", optarg);
+					}
+					else{
+						fd[fd_ind++] = temp_fd;
 					}
 					if(verbose_flag){
 						printf("--rdonly %s\n", optarg);
 					}
 					break;
-				case 'w':
+				}
+				case 'w':{
 					if((next_optind != argc) && !isAnOption(argv[next_optind])){
 						fprintf(stderr, "error: wronly can only accept one argument, further arguments to wronly were ignored\n");
+					}
+					int temp_fd = open(optarg, O_WRONLY, 644);
+					if (temp_fd == -1){
+						fprintf(stderr, "error: could not open file \"%s\" for write\n", optarg);
+					}
+					else{
+						fd[fd_ind++] = temp_fd;
 					}
 					if(verbose_flag){
 						printf("--wronly %s\n", optarg);
 					}
 					break;
-				case 'p':
+				}
+				case 'p':{
 					if((next_optind != argc) && !isAnOption(argv[next_optind])){
 						fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
 					}
@@ -85,12 +108,19 @@ int main(int argc, char **argv){
 						printf("--pipe\n");
 					}
 					break;
-				case 'c': //special case, will take more work
+				}
+				case 'c':{ //special case, will take more work
+					//not parsed up
 					printf("command with args %s\n", optarg);
 					if(verbose_flag){
 						printf("--command %s\n", optarg);
 					}
 					break;
+				}
+				case '?':{
+					fprintf(stderr, "error: option not recognized or no option argument found\n");
+					break;
+				}
 			}
 
 			//move to next option
@@ -100,6 +130,11 @@ int main(int argc, char **argv){
 			curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
 			next_optind = optind;
 		} while(curr_opt != -1);
+	}
+
+	for(int i = 0; i < fd_ind; i++){
+		if(close(fd[i]) != 0)
+			fprintf(stderr, "error: could not close file at logical index %d", i);
 	}
 
   return EXIT_SUCCESS;
