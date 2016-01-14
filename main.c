@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <getopt.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 //defines
 #define TRUE 1
@@ -18,6 +20,8 @@ int isAnOption(char *cstring){
 	else
 		return TRUE;
 }
+
+//MUST PRINT ERROR MESSAGES FOR INVALID ARGUMENTS
 
 //main function
 int main(int argc, char **argv){
@@ -39,7 +43,6 @@ int main(int argc, char **argv){
 	int curr_opt;
 	int curr_optind;
 	int next_optind;
-	int arg_cnt;
 
 	//insert check for if first argument is an option. otherwise there's a problem
 
@@ -50,56 +53,52 @@ int main(int argc, char **argv){
 		fprintf(stderr, "error: no options found\n");
 	}
 	else {
-		/*
-		insert check for if argv[1] is an option. otherwise there's a problem.
-		*/
-		do {
-
-		printf("curr_optind = %d | curr_opt = %c | next_optind = %d\n", curr_optind, curr_opt, next_optind);
-		printf("argv[%d] = %s\n", next_optind, argv[next_optind]);
-
-		switch(curr_opt){
-			case 'r':
-				//if(next_optind != curr_optind + 2)
-				//	fprintf(stderr, "error: rdonly can only accept one argument\n"); //print to stderror?
-				//else
-					printf("rdonly with arg %s\n", optarg);
-				if(verbose_flag){
-					printf("--rdonly %s\n", optarg);
-				}
-				break;
-			case 'w':
-				//if(next_optind != curr_optind + 2)
-				//	fprintf(stderr, "error: wronly can only accept one argument\n"); //print to stderror?
-				//else
-					printf("wronly with args %s\n", optarg);
-				if(verbose_flag){
-					printf("--wronly %s\n", optarg);
-				}
-				break;
-			case 'p':
-				//if(next_optind != curr_optind + 1)
-				//	fprintf(stderr, "error: pipe can not have any arguments\n");	
-				printf("pipe\n");
-				printf("pipe with arg = %s\n", optarg);	
-				if(verbose_flag){
-					printf("--pipe\n");
-				}
-				break;
-			case 'c': //special case, will take more work
-				//if(next_optind < curr_optind + 5)
-				//	fprintf(stderr, "error: command needs more arguments\n");
-				printf("command with args %s\n", optarg);
-				if(verbose_flag){
-					printf("--command %s\n", optarg);
-				}
-				break;
+		if(!isAnOption(argv[curr_optind])){
+			fprintf(stderr, "error: argument found before options and was ignored\n");
 		}
-		
-		curr_optind = optind;
-		curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
-		next_optind = optind;
+		do {
+			//printf("curr_optind = %d | curr_opt = %c | next_optind = %d\n", curr_optind, curr_opt, next_optind);
+			//printf("argv[%d] = %s\n", next_optind, argv[next_optind]);
+	
+			switch(curr_opt){
+				case 'r':
+					if((next_optind != argc) && !isAnOption(argv[next_optind])){
+						fprintf(stderr, "error: rdonly can only accept one argument, further arguments to wronly were ignored\n");
+					}
+					if(verbose_flag){
+						printf("--rdonly %s\n", optarg);
+					}
+					break;
+				case 'w':
+					if((next_optind != argc) && !isAnOption(argv[next_optind])){
+						fprintf(stderr, "error: wronly can only accept one argument, further arguments to wronly were ignored\n");
+					}
+					if(verbose_flag){
+						printf("--wronly %s\n", optarg);
+					}
+					break;
+				case 'p':
+					if((next_optind != argc) && !isAnOption(argv[next_optind])){
+						fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
+					}
+					if(verbose_flag){
+						printf("--pipe\n");
+					}
+					break;
+				case 'c': //special case, will take more work
+					printf("command with args %s\n", optarg);
+					if(verbose_flag){
+						printf("--command %s\n", optarg);
+					}
+					break;
+			}
 
+			//move to next option
+			while((optind != argc) && !isAnOption(argv[optind]))
+				optind++;
+			curr_optind = optind;
+			curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
+			next_optind = optind;
 		} while(curr_opt != -1);
 	}
 
