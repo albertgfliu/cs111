@@ -126,12 +126,16 @@ int main(int argc, char **argv){
                         dup2(arg_fd[1], STDOUT_FILENO);
                         dup2(arg_fd[2], STDERR_FILENO);
                         
-                        /*
                         if(verbose_flag){
                             printf("--commmand");
-                            for (int i = 0; i < )
+                            for (int i = 0; i < 3; i++) {
+                                printf(" %c", arg_fd[i]);
+                            }
+                            for (int j = 0; j < arg_ind; j++) {
+                                printf(" %s", arg[j]);
+                            }
                         }
-                        */
+
                         if (execvp(arg[0], arg) == -1) {
                             fprintf(stderr, "Error: cannot execute command \"%s\"\n", argv[0]);
                             exit(EXIT_FAILURE);
