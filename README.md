@@ -1,22 +1,21 @@
-# UCLA CS 111 Winter 2016 Lab 1 - Simpleton Shell
+# UCLA CS 111 Winter 2016 Lab 1a - Simpleton Shell
 
-Things of note:
-argc stands for argument count, and counts the number of arguments we have to our main function. Arguments are denoted as strings separated by a space.
-When our program is run, e.g.:
-    ./simpsh --rdonly a --wronly b --pipe --rdonly c
-There are 8 arguments, which are stored in the string array argv as follows:
-    argv[0] = ./simpsh
-    argv[1] = --rdonly
-    argv[2] = a
-    argv[3] = --wronly 
-    argv[4] = b
-    argv[5] = --pipe
-    argv[6] = --rdonly
-    argv[7] = c
+There are several things worth noting in our implementation of the simpsh, 1a:
 
-The “command” implementation assumes that the command is valid in the form of:
-—command  stdin stdout stderr cmd arg arg…
+1. We made an assumption that the amount of file descriptors opened would not exceed 1000.
 
-It does not check if the file descriptor numbers are valid or are actually numbers.
+2. We assume that the options of simpsh referring to the logical file descriptors 
+do not know if these fds are operating or not prior to execution. Thus, we still 
+maintained a logical fd number fd[] for each file. If the "open" fails, 
+the logical fd can be mapped to a dummy value to signify invalid fd. 
 
-“For the purpose of this lab, you do not need to care if a command exists or whether the arguments to the command are valid. execvp just takes whatever there and executes (which may fail or succeed).” According to our TA, Tuan Le
+3. The simpsh “command” option does not check if the file descriptor numbers are valid.
+
+4. For the purpose of this lab 1a, we assume the user is advised of the correct format of the arguments following “command”. execvp() just takes whatever there and executes 
+(which may fail or succeed).
+
+5. We assume that without the “wait” option, it is possible that none of the 
+child processes of the subshells will finish before simpsh finishes executing 
+all of its options. We implemented the “command” option by obtaining the 
+status of child process with WNOHANG without "actually waiting" for any process to terminate.
+
