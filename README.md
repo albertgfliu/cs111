@@ -13,3 +13,10 @@ There are 8 arguments, which are stored in the string array argv as follows:
     argv[5] = --pipe
     argv[6] = --rdonly
     argv[7] = c
+
+The “command” implementation assumes that the command is valid in the form of:
+—command  stdin stdout stderr cmd arg arg…
+
+It does not check if the file descriptor numbers are valid or are actually numbers.
+
+“For the purpose of this lab, you do not need to care if a command exists or whether the arguments to the command are valid. execvp just takes whatever there and executes (which may fail or succeed).” According to our TA, Tuan Le
