@@ -8,7 +8,8 @@
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <errno.h>
-
+#include <ctype.h>
+#include <signal.h>
 #include <unistd.h>
 
 //defines
@@ -21,6 +22,7 @@ static int verbose_flag;
 static int wait_flag;
 static int fd[1000];
 static int pipe_fd[2];
+static int close_fd;
 static int cmd_fd[3];
 char *cmd[cmd_size];
 static int return_val;
@@ -38,6 +40,15 @@ int isAnOption(char *cstring){
 void flushCmd(){
 	for(int i = 0; i < cmd_size; i++)
 		cmd[i] = NULL;
+}
+
+int isNumber(char *string){
+    int i;
+    for(i = 0; string != NULL && *(string + i) != '\0'; i++) {
+        if (!isdigit(*(string+i)))
+            return FALSE;
+    return TRUE;
+    }
 }
 
 //MUST PRINT ERROR MESSAGES FOR INVALID ARGUMENTS
@@ -59,17 +70,22 @@ int main(int argc, char **argv){
         {"rsync",       no_argument, 0,    's'},
         {"sync",        no_argument, 0,    'S'},
         {"trunc",       no_argument, 0,    't'},
-
-		/*options that set a flag*/
-		{"verbose",     no_argument, &verbose_flag, 1},
-		{"wait",        no_argument, &wait_flag, 1},
-
-		/*options that don't set a flag*/
+        
+        /*file opening options*/
 		{"rdonly",      required_argument,	0, 	'r'},
 		{"wronly",      required_argument,	0,	'w'},
         {"rdwr",        required_argument,  0,  'R'},
+        {"pipe",        no_argument,		0, 	'p'},
+
+        /*subcommand options*/
 		{"command",     required_argument,	0,	'c'},
-		{"pipe",        no_argument,		0, 	'p'},
+        {"wait",        no_argument, &wait_flag, 1},
+        
+        /*miscellaneous options*/
+        {"verbose",     no_argument, &verbose_flag, 1},
+        {"close",       required_argument,	0,	'L'},
+        {"abort",       no_argument,        0,  'A'},
+
 		{0,             0,                  0,    0}
 	};
 	
@@ -108,6 +124,7 @@ int main(int argc, char **argv){
 			//printf("optopt = %d\n", optopt);
 	
 			switch(curr_opt){
+                // append
                 case 'a':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: append can not accept any arguments, all arguments to append were ignored\n");
@@ -118,6 +135,8 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                    
+                // cloexec
                 case 'l':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: cloexec can not accept any arguments, all arguments to cloexec were ignored\n");
@@ -128,6 +147,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // creat
                 case 'C':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: creat can not accept any arguments, all arguments to creat were ignored\n");
@@ -139,6 +159,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // directory
                 case 'd':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: directory can not accept any arguments, all arguments to directory were ignored\n");
@@ -149,6 +170,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // dsync
                 case 'D':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: dsync can not accept any arguments, all arguments to dsync were ignored\n");
@@ -159,6 +181,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // excl
                 case 'e':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: excl can not accept any arguments, all arguments to excl were ignored\n");
@@ -169,6 +192,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // nofollow
                 case 'n':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: nofollow can not accept any arguments, all arguments to nofollow were ignored\n");
@@ -179,6 +203,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // nonblock
                 case 'N':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: nonblock can not accept any arguments, all arguments to nonblock were ignored\n");
@@ -189,6 +214,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // rsync
                 case 's':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: rsync can not accept any arguments, all arguments to rsync were ignored\n");
@@ -199,6 +225,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // sync
                 case 'S':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: sync can not accept any arguments, all arguments to sync were ignored\n");
@@ -209,6 +236,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // trunc
                 case 't':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
                         fprintf(stderr, "error: trunc can not accept any arguments, all arguments to trunc were ignored\n");
@@ -219,6 +247,7 @@ int main(int argc, char **argv){
                     }
                     break;
                 }
+                // rdonly, rdwr, wronly
                 case 'r':
                 case 'R':
 				case 'w':
@@ -257,23 +286,24 @@ int main(int argc, char **argv){
                     oflags = 0;
                     
 					break;
-				
+				// pipe
 				case 'p':{
-					if((next_optind != argc) && !isAnOption(argv[next_optind])){
-						fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
-					}
-					if(verbose_flag){
-						printf("--pipe\n");
-					}
-					if(pipe(pipe_fd) == -1){
-						fprintf(stderr, "error: failure to create a pipe\n");
-					}
-					fd[fd_ind++] = pipe_fd[0];
-					fd[fd_ind++] = pipe_fd[1];
-
-					break;
-				}
-				case 'c':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
+                    }
+                    if(verbose_flag){
+                        printf("--pipe\n");
+                    }
+                    if(pipe(pipe_fd) == -1){
+                        fprintf(stderr, "error: failure to create a pipe\n");
+                    }
+                    fd[fd_ind++] = pipe_fd[0];
+                    fd[fd_ind++] = pipe_fd[1];
+                    
+                    break;
+                }
+                // command
+                case 'c':{
 					while((optind != argc) && !isAnOption(argv[optind])){
 						optind++;
 					}
@@ -351,6 +381,30 @@ int main(int argc, char **argv){
 					
 					break;
 				}
+                // close
+                case 'L':{
+                    if (&verbose_flag)
+                        printf("--close %s\n", optarg);
+                    if (!isNumber(optarg)){
+                        fprintf(stderr, "error: close requires an integer argument");
+                        continue;
+                    }
+                    close_fd = atoi(optarg);
+                    if (close_fd > fd_ind){
+                        fprintf(stderr, "error: the entered file descriptor number is invalid");
+                        continue;
+                    }
+                    close(fd[close_fd]);
+                    fd[close_fd] = -1;
+                    
+                    break;
+                }
+                // abort
+                case 'A':{
+                    if (&verbose_flag)
+                        printf("--abort\n");
+                    raise(SIGSEGV);
+                }
 				case '?':{
 					fprintf(stderr, "error: option not recognized or no option argument found\n");
 					break;
@@ -369,6 +423,7 @@ int main(int argc, char **argv){
 	for(int i = 0; i < fd_ind; i++){
 		if(close(fd[i]) != 0){
 			fprintf(stderr, "error: could not close file at logical index %d\n", i);
+            exit(EXIT_FAILURE);
 		}
 	}
 

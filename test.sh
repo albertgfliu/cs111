@@ -54,4 +54,22 @@ else
 	echo "Test 6 success"
 fi
 
+#test --abort option
+echo "./simpsh --abort --rdonly a"
+./simpsh --abort --rdonly a
+if [ $? -eq 0 ]; then
+	echo "Test 7 had errors "
+else
+	echo "Test 7 success"
+fi
+
+#test --close option
+echo "./simpsh --rdonly a --wronly b --close 1 --wronly c --command 0 1 2 cat"
+./simpsh --rdonly a --wronly b --close 1 --wronly c --command 0 1 2 cat
+if [ $? -eq 0 ]; then
+	echo "Test 8 had errors "
+else
+	echo "Test 8 success"
+fi
+
 
