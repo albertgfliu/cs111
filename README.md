@@ -19,3 +19,4 @@ child processes of the subshells will finish before simpsh finishes executing
 all of its options. We implemented the “command” option by obtaining the 
 status of child process with WNOHANG without "actually waiting" for any process to terminate.
 
+6. In the Makefile, we use the -std=gnu11 to compile our source file

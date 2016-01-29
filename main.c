@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <errno.h>
 
 #include <unistd.h>
 
@@ -23,6 +24,7 @@ static int pipe_fd[2];
 static int cmd_fd[3];
 char *cmd[cmd_size];
 static int return_val;
+const mode_t mode = 0644;
 //char *cmd[20];
 
 //helper function
@@ -45,23 +47,39 @@ int main(int argc, char **argv){
 
 	static struct option long_opts[] = 
 	{
+        /*file flags options*/
+        {"append",      no_argument, 0,    'a'},
+        {"cloexec",     no_argument, 0,    'l'},
+        {"creat",       no_argument, 0,    'C'},
+        {"directory",   no_argument, 0,    'd'},
+        {"dsync",       no_argument, 0,    'D'},
+        {"excl",        no_argument, 0,    'e'},
+        {"nofollow",   no_argument, 0,    'n'},
+        {"nonblock",    no_argument, 0,    'N'},
+        {"rsync",       no_argument, 0,    's'},
+        {"sync",        no_argument, 0,    'S'},
+        {"trunc",       no_argument, 0,    't'},
+
 		/*options that set a flag*/
-		{"verbose", no_argument, &verbose_flag, 1},
-		{"wait", no_argument, &wait_flag, 1},
+		{"verbose",     no_argument, &verbose_flag, 1},
+		{"wait",        no_argument, &wait_flag, 1},
 
 		/*options that don't set a flag*/
-		{"rdonly",	required_argument,	0, 	'r'},
-		{"wronly",	required_argument,	0,	'w'},
-		{"command",	required_argument,	0,	'c'},
-		{"pipe",	no_argument,		0, 	'p'},
-		{0, 		0, 			0, 	0}
+		{"rdonly",      required_argument,	0, 	'r'},
+		{"wronly",      required_argument,	0,	'w'},
+        {"rdwr",        required_argument,  0,  'R'},
+		{"command",     required_argument,	0,	'c'},
+		{"pipe",        no_argument,		0, 	'p'},
+		{0,             0,                  0,    0}
 	};
 	
 	int long_opts_ind;
 	int curr_opt;
 	int curr_optind;
 	int next_optind;
-
+    int oflags = 0;
+    char *option;
+    
 	int fd_ind = 0;
 	int cmd_ind = 0;
 
@@ -90,36 +108,156 @@ int main(int argc, char **argv){
 			//printf("optopt = %d\n", optopt);
 	
 			switch(curr_opt){
-				case 'r':{
+                case 'a':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: append can not accept any arguments, all arguments to append were ignored\n");
+                    }
+                    oflags |= O_APPEND;
+                    if(verbose_flag){
+                        printf("--append\n");
+                    }
+                    break;
+                }
+                case 'l':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: cloexec can not accept any arguments, all arguments to cloexec were ignored\n");
+                    }
+                    oflags |= O_CLOEXEC;
+                    if(verbose_flag){
+                        printf("--cloexec\n");
+                    }
+                    break;
+                }
+                case 'C':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: creat can not accept any arguments, all arguments to creat were ignored\n");
+                        exit(EXIT_FAILURE);
+                    }
+                    oflags |= O_CREAT;
+                    if(verbose_flag){
+                        printf("--creat\n");
+                    }
+                    break;
+                }
+                case 'd':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: directory can not accept any arguments, all arguments to directory were ignored\n");
+                    }
+                    oflags |= O_DIRECTORY;
+                    if(verbose_flag){
+                        printf("--directory\n");
+                    }
+                    break;
+                }
+                case 'D':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: dsync can not accept any arguments, all arguments to dsync were ignored\n");
+                    }
+                    oflags |= O_DSYNC;
+                    if(verbose_flag){
+                        printf("--dsync\n");
+                    }
+                    break;
+                }
+                case 'e':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: excl can not accept any arguments, all arguments to excl were ignored\n");
+                    }
+                    oflags |= O_EXCL;
+                    if(verbose_flag){
+                        printf("--excl\n");
+                    }
+                    break;
+                }
+                case 'n':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: nofollow can not accept any arguments, all arguments to nofollow were ignored\n");
+                    }
+                    oflags |= O_NOFOLLOW;
+                    if(verbose_flag){
+                        printf("--nofllow\n");
+                    }
+                    break;
+                }
+                case 'N':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: nonblock can not accept any arguments, all arguments to nonblock were ignored\n");
+                    }
+                    oflags |= O_NONBLOCK;
+                    if(verbose_flag){
+                        printf("--nonblock\n");
+                    }
+                    break;
+                }
+                case 's':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: rsync can not accept any arguments, all arguments to rsync were ignored\n");
+                    }
+                    oflags |= O_RSYNC;
+                    if(verbose_flag){
+                        printf("--rsync\n");
+                    }
+                    break;
+                }
+                case 'S':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: sync can not accept any arguments, all arguments to sync were ignored\n");
+                    }
+                    oflags |= O_SYNC;
+                    if(verbose_flag){
+                        printf("--sync\n");
+                    }
+                    break;
+                }
+                case 't':{
+                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        fprintf(stderr, "error: trunc can not accept any arguments, all arguments to trunc were ignored\n");
+                    }
+                    oflags |= O_TRUNC;
+                    if(verbose_flag){
+                        printf("--trunc\n");
+                    }
+                    break;
+                }
+                case 'r':
+                case 'R':
+				case 'w':
+                    if (curr_opt == 'r'){
+                        oflags |= O_RDONLY;
+                        option = "rdonly";
+                    }
+                    else if (curr_opt == 'R'){
+                        oflags |= O_RDWR;
+                        option = "rdwr";
+                    }
+                    else if (curr_opt == 'w'){
+                        oflags |= O_WRONLY;
+                        option = "wronly";
+                    }
 					if((next_optind != argc) && !isAnOption(argv[next_optind])){
-						fprintf(stderr, "error: rdonly can only accept one argument, further arguments to rdonly were ignored\n");
+						fprintf(stderr, "error: %s can only accept one argument, further arguments to %s were ignored\n", option, option);
 					}
 					if(verbose_flag){
-						printf("--rdonly %s\n", optarg);
-					}
-					int temp_fd = open(optarg, O_RDONLY, 644);
-					if (temp_fd == -1){
-						fprintf(stderr, "error: could not open file \"%s\" for read\n", optarg);
-					}
-					fd[fd_ind++] = temp_fd;
-					
-					break;
-				}
-				case 'w':{
-					if((next_optind != argc) && !isAnOption(argv[next_optind])){
-						fprintf(stderr, "error: wronly can only accept one argument, further arguments to wronly were ignored\n");
-					}
-					if(verbose_flag){
-						printf("--wronly %s\n", optarg);
-					}
-					int temp_fd = open(optarg, O_WRONLY, 644);
-					if (temp_fd == -1){
-						fprintf(stderr, "error: could not open file \"%s\" for write\n", optarg);
+						printf("--%s %s\n", option, optarg);
+                    }
+                    int temp_fd = open(optarg, oflags, mode);
+                    if (errno == EEXIST){
+                        fprintf(stderr, "error: file \"%s\" already exists\n", optarg);
+                        exit(errno);
+                    }
+                    if (errno == ENOTDIR){
+                        fprintf(stderr, "error: file \"%s\" is a non-direcotry file\n", optarg);
+                        exit(errno);
+                    }
+                    if (temp_fd == -1){
+						fprintf(stderr, "error: could not open file \"%s\"\n", optarg);
+                        exit(errno);
 					}
 					fd[fd_ind++] = temp_fd;
-					
+                    oflags = 0;
+                    
 					break;
-				}
+				
 				case 'p':{
 					if((next_optind != argc) && !isAnOption(argv[next_optind])){
 						fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
