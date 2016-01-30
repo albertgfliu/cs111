@@ -1,4 +1,5 @@
 //main.c
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
@@ -11,6 +12,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <unistd.h>
+#include <ucontext.h>
 
 //defines
 #define TRUE 1
@@ -23,6 +25,9 @@ static int wait_flag;
 static int fd[1000];
 static int pipe_fd[2];
 static int close_fd;
+static int catch_sig;
+static int ignore_sig;
+static int default_sig;
 static int cmd_fd[3];
 char *cmd[cmd_size];
 static int return_val;
@@ -49,6 +54,22 @@ int isNumber(char *string){
             return FALSE;
     return TRUE;
     }
+}
+
+void catch_handler(int sig){
+    fprintf(stderr, "error: signal %d caught\n", sig);
+    exit(sig);
+}
+
+void ignore_handler(int sig, siginfo_t *si, void *arg){
+    signal(sig, SIG_IGN);
+    ucontext_t *context = (ucontext_t*)arg;
+    context->uc_mcontext.gregs[REG_RIP]++;
+}
+
+void pause_handler(int sig, siginfo_t *si, void *arg){
+    fprintf(stderr, "error: fail to pause");
+    exit(EXIT_FAILURE);
 }
 
 //MUST PRINT ERROR MESSAGES FOR INVALID ARGUMENTS
@@ -85,7 +106,10 @@ int main(int argc, char **argv){
         {"verbose",     no_argument, &verbose_flag, 1},
         {"close",       required_argument,	0,	'L'},
         {"abort",       no_argument,        0,  'A'},
-
+        {"catch",       required_argument,	0,	'T'},
+        {"ignore",      required_argument,	0,	'i'},
+        {"default",     required_argument,	0,	'f'},
+        {"pause",       no_argument,        0,	'P'},
 		{0,             0,                  0,    0}
 	};
 	
@@ -101,11 +125,16 @@ int main(int argc, char **argv){
 
 	verbose_flag = 0;
 	wait_flag = 0;
+    ignore_sig = 0;
+    default_sig = 0;
 
 	return_val = 0;
 
 	pid_t pid;
 	pid_t c_pid;
+    
+    //signal handling
+    struct sigaction sa;
 	
 	curr_optind = optind;
 	curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
@@ -383,16 +412,16 @@ int main(int argc, char **argv){
 				}
                 // close
                 case 'L':{
-                    if (&verbose_flag)
+                    if (verbose_flag)
                         printf("--close %s\n", optarg);
                     if (!isNumber(optarg)){
                         fprintf(stderr, "error: close requires an integer argument");
-                        continue;
+                        exit(EXIT_FAILURE);
                     }
                     close_fd = atoi(optarg);
                     if (close_fd > fd_ind){
                         fprintf(stderr, "error: the entered file descriptor number is invalid");
-                        continue;
+                        exit(EXIT_FAILURE);
                     }
                     close(fd[close_fd]);
                     fd[close_fd] = -1;
@@ -401,9 +430,80 @@ int main(int argc, char **argv){
                 }
                 // abort
                 case 'A':{
-                    if (&verbose_flag)
+                    if (verbose_flag)
                         printf("--abort\n");
                     raise(SIGSEGV);
+                    break;
+                }
+                // catch
+                case 'T':{
+                    if (verbose_flag) {
+                        printf("--catch %s\n", optarg);
+                    }
+                    catch_sig = atoi(optarg);
+                    if (!isNumber(optarg) || catch_sig < 0){
+                        fprintf(stderr, "error: catch requires a valid integer argument");
+                        continue;
+                    }
+                    sa.sa_handler = catch_handler;
+                    sigemptyset(&sa.sa_mask);
+                    sa.sa_flags = SA_SIGINFO;
+                    
+                    if (sigaction(catch_sig, &sa, NULL) < 0){
+                        /*handle error*/
+                        fprintf(stderr, "error: fail to handle signal catch %d.\n",catch_sig);
+                        exit(EXIT_FAILURE);
+                    }
+                    
+                    break;
+                }
+                // ignore
+                case 'i':{
+                    ignore_sig = atoi(optarg);
+                    if (verbose_flag) {
+                        printf("--ignore %s\n", optarg);
+                    }
+                    if (!isNumber(optarg) || ignore_sig < 0){
+                        fprintf(stderr, "error: ignore requires a valid integer argument");
+                        continue;
+                    }
+                    
+                    sa.sa_sigaction = &ignore_handler;
+                    sa.sa_flags = SA_SIGINFO;
+                    
+                    if (sigaction(ignore_sig, &sa, NULL) < 0){
+                        /*handle error*/
+                        fprintf(stderr, "error: fail to ignore signal %d.\n",ignore_sig);
+                        exit(EXIT_FAILURE);
+                    }
+                    break;
+                }
+                // default
+                case 'f':{
+                    default_sig = atoi(optarg);
+                    if (verbose_flag) {
+                        printf("--default %s\n", optarg);
+                    }
+                    if (!isNumber(optarg) || default_sig < 0){
+                        fprintf(stderr, "error: default requires a valid integer argument");
+                        continue;
+                    }
+                    if (signal(default_sig, SIG_DFL) < 0){
+                        /* Handle error */
+                        fprintf(stderr, "error: fail to handle signal %d with default\n", default_sig);
+                        exit(EXIT_FAILURE);
+                        break;
+                    }
+                    break;
+                }
+                // pause
+                case 'P':{
+                    if (verbose_flag) {
+                        printf("--pause %s\n", optarg);
+                    }
+                    pause();
+                    
+                    break;
                 }
 				case '?':{
 					fprintf(stderr, "error: option not recognized or no option argument found\n");

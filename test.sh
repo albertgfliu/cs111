@@ -72,4 +72,23 @@ else
 	echo "Test 8 success"
 fi
 
+#test --catch option
+echo "./simpsh --catch 11 --abort"
+./simpsh --catch 11 --abort
+if [ $? -ne 11 ]; then
+	echo "Test 9 had errors "
+else
+	echo "Test 9 success"
+fi
+
+
+#test --ignore option
+echo "./simpsh --ignore 11 --abort --creat --rdonly e"
+./simpsh --ignore 11 --abort --creat --rdonly e
+if [ $? -ne 0 ]; then
+	echo "Test 10 had errors "
+else
+	echo "Test 10 success"
+fi
+
 
