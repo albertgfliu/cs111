@@ -13,15 +13,21 @@
 #include <signal.h>
 #include <unistd.h>
 #include <ucontext.h>
+#include <sys/resource.h>
 
 //defines
 #define TRUE 1
 #define FALSE 0
 #define cmd_size 100
 
-//global variables
+/*Global Variables*/
+
+/*flags*/
 static int verbose_flag;
 static int wait_flag;
+static int profile_flag;
+
+/*temporary storage*/
 static int fd[1000];
 static int fd_pipe[1000];
 static int pipe_fd[2];
@@ -33,9 +39,17 @@ static int cmd_fd[3];
 char *cmd[cmd_size];
 static int return_val;
 const mode_t mode = 0644;
-//char *cmd[20];
+struct rusage usage;
 
-//helper function
+static int wait_info_ind;
+struct wait_info{
+    pid_t wait_pid;
+    char *wait_cmd[cmd_size];
+};
+
+struct wait_info wait_infos[100];
+
+/*Helper Functions*/
 int isAnOption(char *cstring){
 	if((cstring[0] != '-') || (cstring[1] != '-'))
 		return FALSE;
@@ -49,31 +63,29 @@ void flushCmd(){
 }
 
 int isNumber(char *string){
-    int i;
-    for(i = 0; string != NULL && *(string + i) != '\0'; i++) {
-        if (!isdigit(*(string+i)))
-            return FALSE;
-    return TRUE;
-    }
+	int i;
+	for(i = 0; string != NULL && *(string + i) != '\0'; i++) {
+		if (!isdigit(*(string+i)))
+			return FALSE;
+		return TRUE;
+	}
 }
 
 void catch_handler(int sig){
-    fprintf(stderr, "error: signal %d caught\n", sig);
-    exit(sig);
+	fprintf(stderr, "error: signal %d caught\n", sig);
+	exit(sig);
 }
 
 void ignore_handler(int sig, siginfo_t *si, void *arg){
-    signal(sig, SIG_IGN);
-    ucontext_t *context = (ucontext_t*)arg;
-    context->uc_mcontext.gregs[REG_RIP]++;
+	signal(sig, SIG_IGN);
+	ucontext_t *context = (ucontext_t*)arg;
+	context->uc_mcontext.gregs[REG_RIP]++;
 }
 
 void pause_handler(int sig, siginfo_t *si, void *arg){
-    fprintf(stderr, "error: fail to pause");
-    exit(EXIT_FAILURE);
+	fprintf(stderr, "error: fail to pause");
+	exit(EXIT_FAILURE);
 }
-
-//MUST PRINT ERROR MESSAGES FOR INVALID ARGUMENTS
 
 //main function
 int main(int argc, char **argv){
@@ -86,56 +98,58 @@ int main(int argc, char **argv){
         {"creat",       no_argument, 0,    'C'},
         {"directory",   no_argument, 0,    'd'},
         {"dsync",       no_argument, 0,    'D'},
-        {"excl",        no_argument, 0,    'e'},
-        {"nofollow",   no_argument, 0,    'n'},
+        {"excl",		no_argument, 0,    'e'},
+        {"nofollow",	no_argument, 0,    'n'},
         {"nonblock",    no_argument, 0,    'N'},
         {"rsync",       no_argument, 0,    's'},
         {"sync",        no_argument, 0,    'S'},
         {"trunc",       no_argument, 0,    't'},
         
         /*file opening options*/
-		{"rdonly",      required_argument,	0, 	'r'},
-		{"wronly",      required_argument,	0,	'w'},
+	{"rdonly",      required_argument,	0, 	'r'},
+	{"wronly",      required_argument,	0,	'w'},
         {"rdwr",        required_argument,  0,  'R'},
         {"pipe",        no_argument,		0, 	'p'},
 
         /*subcommand options*/
-		{"command",     required_argument,	0,	'c'},
+	{"command",     required_argument,	0,	'c'},
         {"wait",        no_argument, &wait_flag, 1},
         
         /*miscellaneous options*/
-        {"verbose",     no_argument, &verbose_flag, 1},
         {"close",       required_argument,	0,	'L'},
+        {"verbose",     no_argument, &verbose_flag, 1},
+	{"profile", 	no_argument, &profile_flag, 1},
         {"abort",       no_argument,        0,  'A'},
         {"catch",       required_argument,	0,	'T'},
         {"ignore",      required_argument,	0,	'i'},
         {"default",     required_argument,	0,	'f'},
         {"pause",       no_argument,        0,	'P'},
-		{0,             0,                  0,    0}
+	{0,             0,                  0,	0}
 	};
 	
 	int long_opts_ind;
 	int curr_opt;
 	int curr_optind;
 	int next_optind;
-    int oflags = 0;
-    char *option;
+	int oflags = 0;
+	char *option;
     
 	int fd_ind = 0;
 	int cmd_ind = 0;
 
 	verbose_flag = 0;
 	wait_flag = 0;
-    ignore_sig = 0;
-    default_sig = 0;
+	profile_flag = 0;
+	ignore_sig = 0;
+	default_sig = 0;
 
 	return_val = 0;
 
 	pid_t pid;
 	pid_t c_pid;
     
-    //signal handling
-    struct sigaction sa;
+	//signal handling
+	struct sigaction sa;
 	
 	curr_optind = optind;
 	curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
@@ -154,18 +168,17 @@ int main(int argc, char **argv){
 			//printf("optopt = %d\n", optopt);
 	
 			switch(curr_opt){
-                // append
-                case 'a':{
-                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
-                        fprintf(stderr, "error: append can not accept any arguments, all arguments to append were ignored\n");
+               	// append
+				case 'a':{
+				if((next_optind != argc) && !isAnOption(argv[next_optind])){
+					fprintf(stderr, "error: append can not accept any arguments, all arguments to append were ignored\n");
                     }
-                    oflags |= O_APPEND;
-                    if(verbose_flag){
-                        printf("--append\n");
-                    }
-                    break;
+					oflags |= O_APPEND;
+					if(verbose_flag){
+						printf("--append\n");
+					}
+					break;
                 }
-                    
                 // cloexec
                 case 'l':{
                     if((next_optind != argc) && !isAnOption(argv[next_optind])){
@@ -317,111 +330,62 @@ int main(int argc, char **argv){
                     
                     /*clean oflags*/
                     oflags = 0;
-                    
-					break;
-				// pipe
-				case 'p':{
-                    if((next_optind != argc) && !isAnOption(argv[next_optind])){
-                        fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
-                    }
-                    if(verbose_flag){
-                        printf("--pipe\n");
-                    }
-                    if(pipe(pipe_fd) == -1){
-                        fprintf(stderr, "error: failure to create a pipe\n");
-                    }
-                    
-                    /*identify pipe file descriptors to the pipe array*/
-                    fd[fd_ind++] = pipe_fd[0];
-                    fd_pipe[fd_ind] = 1;
-                    fd[fd_ind++] = pipe_fd[1];
-                    fd_pipe[fd_ind] = 1;
-                    
                     break;
-                }
-                // command
-                case 'c':{
-					while((optind != argc) && !isAnOption(argv[optind])){
-						optind++;
-					}
-					if(optind < (curr_optind + 5))
-						fprintf(stderr, "error: missing arguments to --command, your command will not be run\n");
-					else{
-						
-						
-						cmd_fd[0] = atoi(optarg);
-						cmd_fd[1] = atoi(argv[next_optind++]);
-						cmd_fd[2] = atoi(argv[next_optind++]);
-
-						cmd_ind = 0;
-						//for(int i = 0; i < 3; i++)
-						//	printf("cmd_fd[%d] = %d\n", i, cmd_fd[i]);
-						
-						flushCmd();
-
-						while((next_optind != argc) && !isAnOption(argv[next_optind])){
-							char *char_ptr = malloc(sizeof(argv[next_optind]));
-							//printf("%d ", (int)sizeof(argv[next_optind]));
-							cmd[cmd_ind] = char_ptr;
-							strcpy(cmd[cmd_ind], argv[next_optind]);
-							cmd_ind++;
-							next_optind++;
+					
+					// pipe
+					case 'p':{
+                    	if((next_optind != argc) && !isAnOption(argv[next_optind])){
+                        	fprintf(stderr, "error: pipe can not accept any arguments, all arguments to pipe were ignored\n");
+                    	}
+                    	if(verbose_flag){
+                        	printf("--pipe\n");
+                    	}
+                    	if(pipe(pipe_fd) == -1){
+                        	fprintf(stderr, "error: failure to create a pipe\n");
+                    	}
+                    
+	                    /*identify pipe file descriptors to the pipe array*/
+	                    fd[fd_ind++] = pipe_fd[0];
+    	                fd_pipe[fd_ind] = 1;
+    	                fd[fd_ind++] = pipe_fd[1];
+    	                fd_pipe[fd_ind] = 1;
+    	                
+    	                break;
+    	            }
+    	
+		            // command
+			case 'c':{
+				while((optind != argc) && !isAnOption(argv[optind])){
+							optind++;
 						}
-						if(verbose_flag){
-							printf("--command");
-							for(int i = 0; i < 3; i++){
-								printf(" %d", cmd_fd[i]);
-							}
-							for(int i = 0; i < cmd_size; i++){
-								if(cmd[i] != NULL){
-									printf(" %s", cmd[i]);
-								}
-							}
-							printf("\n");
-						}
-						
-						c_pid = fork();
-						if(c_pid == 0){	
+						if(optind < (curr_optind + 5))
+							fprintf(stderr, "error: missing arguments to --command, your command will not be run\n");
+						else{
 							
-                            /*close unused side of the pipe*/
-                            if (fd_pipe[cmd_fd[0]])
-                                close(fd[cmd_fd[0]+1]);
-                            if (fd_pipe[cmd_fd[1]])
-                                close(fd[cmd_fd[1]-1]);
-                            if (fd_pipe[cmd_fd[2]])
-                                close(fd[cmd_fd[2]-1]);
-                            
-                            /*direct file descriptors*/
-							dup2(fd[cmd_fd[0]], STDIN_FILENO);
-							dup2(fd[cmd_fd[1]], STDOUT_FILENO);
-							dup2(fd[cmd_fd[2]], STDERR_FILENO);
-
-                            /*execute command*/
-							if(execvp(cmd[0], cmd) == -1){
-								fprintf(stderr, "error: command failed");
+							
+							cmd_fd[0] = atoi(optarg);
+							cmd_fd[1] = atoi(argv[next_optind++]);
+							cmd_fd[2] = atoi(argv[next_optind++]);
+	
+							cmd_ind = 0;
+							//for(int i = 0; i < 3; i++)
+							//	printf("cmd_fd[%d] = %d\n", i, cmd_fd[i]);
+							
+							flushCmd();
+	
+							while((next_optind != argc) && !isAnOption(argv[next_optind])){
+								char *char_ptr = malloc(sizeof(argv[next_optind]));
+								//printf("%d ", (int)sizeof(argv[next_optind]));
+								cmd[cmd_ind] = char_ptr;
+								strcpy(cmd[cmd_ind], argv[next_optind]);
+								cmd_ind++;
+								next_optind++;
 							}
-						}
-						else if(c_pid > 0){
-                            
-                            /*close unused side of the pipe*/
-                            if (fd_pipe[cmd_fd[0]]){
-                                close(fd[cmd_fd[0]]);
-                                fd[cmd_fd[0]] = -1;
-                            }
-                            if (fd_pipe[cmd_fd[1]]){
-                                close(fd[cmd_fd[1]]);
-                                fd[cmd_fd[1]] = -1;
-                            }
-                            if (fd_pipe[cmd_fd[2]]){
-                                close(fd[cmd_fd[2]]);
-                                fd[cmd_fd[2]] = -1;
-                            }
-                            
-							int status;
-							waitpid(c_pid, &status, 0);
-							int exit_status = WEXITSTATUS(status);
-							if(wait_flag){
-								printf("%d", exit_status);
+							if(verbose_flag){
+								printf("--command");
+								for(int i = 0; i < 3; i++){
+									printf(" %d", cmd_fd[i]);
+								}
 								for(int i = 0; i < cmd_size; i++){
 									if(cmd[i] != NULL){
 										printf(" %s", cmd[i]);
@@ -429,139 +393,222 @@ int main(int argc, char **argv){
 								}
 								printf("\n");
 							}
-							if(exit_status > return_val)
-								return_val = exit_status;
+							
+							c_pid = fork();
+							if(c_pid == 0){	
+								
+	                            /*close unused side of the pipe*/
+	                            if (fd_pipe[cmd_fd[0]])
+	                                close(fd[cmd_fd[0]+1]);
+	                            if (fd_pipe[cmd_fd[1]])
+	                                close(fd[cmd_fd[1]-1]);
+	                            if (fd_pipe[cmd_fd[2]])
+	                                close(fd[cmd_fd[2]-1]);
+                            
+	                            /*direct file descriptors*/
+								dup2(fd[cmd_fd[0]], STDIN_FILENO);
+								dup2(fd[cmd_fd[1]], STDOUT_FILENO);
+								dup2(fd[cmd_fd[2]], STDERR_FILENO);
+
+	                            /*execute command*/
+								if(execvp(cmd[0], cmd) == -1){
+									fprintf(stderr, "error: command failed");
+								}
+							}
+							else if(c_pid > 0){
+	                            
+	                            /*close unused side of the pipe*/
+	                            if (fd_pipe[cmd_fd[0]]){
+	                                close(fd[cmd_fd[0]]);
+	                                fd[cmd_fd[0]] = -1;
+	                            }
+	                            if (fd_pipe[cmd_fd[1]]){
+	                                close(fd[cmd_fd[1]]);
+	                                fd[cmd_fd[1]] = -1;
+	                            }
+	                            if (fd_pipe[cmd_fd[2]]){
+	                                close(fd[cmd_fd[2]]);
+	                                fd[cmd_fd[2]] = -1;
+	                            }
+	                            
+								int status;
+								waitpid(c_pid, &status, 0);
+								int exit_status = WEXITSTATUS(status);
+								if(wait_flag){
+									printf("%d", exit_status);
+									for(int i = 0; i < cmd_size; i++){
+										if(cmd[i] != NULL){
+											printf(" %s", cmd[i]);
+										}
+									}
+									printf("\n");
+								}
+								if(exit_status > return_val)
+									return_val = exit_status;
+							}
+							else{ //couldn't create child process
+								fprintf(stderr, "error: could not create child process\n");
+							}
+						
+							
+							for(int i = 0; i < cmd_size; i++)
+								free(cmd[i]);
 						}
-						else{ //couldn't create child process
-							fprintf(stderr, "error: could not create child process\n");
-						}
-						
-						
-						for(int i = 0; i < cmd_size; i++)
-							free(cmd[i]);
-						
-					}
 					
-					break;
-				}
-                // close
-                case 'L':{
-                    if (verbose_flag)
-                        printf("--close %s\n", optarg);
-                    if (!isNumber(optarg)){
-                        fprintf(stderr, "error: close requires an integer argument");
-                        exit(EXIT_FAILURE);
-                    }
-                    close_fd = atoi(optarg);
-                    if (close_fd > fd_ind){
-                        fprintf(stderr, "error: the entered file descriptor number is invalid");
-                        exit(EXIT_FAILURE);
-                    }
-                    close(fd[close_fd]);
-                    fd[close_fd] = -1;
-                    
-                    break;
-                }
-                // abort
-                case 'A':{
-                    if (verbose_flag)
-                        printf("--abort\n");
-                    raise(SIGSEGV);
-                    break;
-                }
-                // catch
-                case 'T':{
-                    if (verbose_flag) {
-                        printf("--catch %s\n", optarg);
-                    }
-                    catch_sig = atoi(optarg);
-                    if (!isNumber(optarg) || catch_sig < 0){
-                        fprintf(stderr, "error: catch requires a valid integer argument");
-                        continue;
-                    }
-                    sa.sa_handler = catch_handler;
-                    sigemptyset(&sa.sa_mask);
-                    sa.sa_flags = SA_SIGINFO;
-                    
-                    if (sigaction(catch_sig, &sa, NULL) < 0){
-                        /*handle error*/
-                        fprintf(stderr, "error: fail to handle signal catch %d.\n",catch_sig);
-                        exit(EXIT_FAILURE);
-                    }
-                    
-                    break;
-                }
-                // ignore
-                case 'i':{
-                    ignore_sig = atoi(optarg);
-                    if (verbose_flag) {
-                        printf("--ignore %s\n", optarg);
-                    }
-                    if (!isNumber(optarg) || ignore_sig < 0){
-                        fprintf(stderr, "error: ignore requires a valid integer argument");
-                        continue;
-                    }
-                    
-                    sa.sa_sigaction = &ignore_handler;
-                    sa.sa_flags = SA_SIGINFO;
-                    
-                    if (sigaction(ignore_sig, &sa, NULL) < 0){
-                        /*handle error*/
-                        fprintf(stderr, "error: fail to ignore signal %d.\n",ignore_sig);
-                        exit(EXIT_FAILURE);
-                    }
-                    break;
-                }
-                // default
-                case 'f':{
-                    default_sig = atoi(optarg);
-                    if (verbose_flag) {
-                        printf("--default %s\n", optarg);
-                    }
-                    if (!isNumber(optarg) || default_sig < 0){
-                        fprintf(stderr, "error: default requires a valid integer argument");
-                        continue;
-                    }
-                    if (signal(default_sig, SIG_DFL) < 0){
-                        /* Handle error */
-                        fprintf(stderr, "error: fail to handle signal %d with default\n", default_sig);
-                        exit(EXIT_FAILURE);
-                        break;
-                    }
-                    break;
-                }
-                // pause
-                case 'P':{
-                    if (verbose_flag) {
-                        printf("--pause %s\n", optarg);
-                    }
-                    pause();
-                    
-                    break;
-                }
-				case '?':{
-					fprintf(stderr, "error: option not recognized or no option argument found\n");
-					break;
-				}
-			}
+						break;
+					}
 
-			//move to next option
-			while((optind != argc) && !isAnOption(argv[optind]))
-				optind++;
-			curr_optind = optind;
-			curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
-			next_optind = optind;
-		} while(curr_opt != -1);
-	}
+                // wait
+                case 'W':{
+                    if (verbose_flag)
+                        printf("--wait\n");
+                    
+                    pid_t returnedPid;
+                    int status;
+                    int exit_status;
+                    int i;
 
-	for(int i = 0; i < fd_ind; i++){
-        if (fd[i] != -1){
-            if(close(fd[i]) != 0){
-                fprintf(stderr, "error: could not close file at logical index %d\n", i);
-                exit(EXIT_FAILURE);
-            }
+                    while((returnedPid = waitpid(-1, &status, 0) )!= -1){
+                        exit_status = WEXITSTATUS(status);
+                        printf("%d", exit_status);
+                        
+                        if(exit_status > return_val)
+                            return_val = exit_status;
+                        /*find the corresponding wait_info*/
+                        for(i = 0 ; i != wait_info_ind; i++){
+                            if(returnedPid == (wait_infos[i]).wait_pid)
+                                break;
+                        }
+                        
+                        /*print out the command*/
+                        for(int j = 0; j < cmd_size; j++){
+                            if(wait_infos[i].wait_cmd[j] != NULL){
+                                printf(" %s", wait_infos[i].wait_cmd[j]);
+                            }
+                        }
+                        printf("\n");
+                    }
+                    
+                    break;
+                }
+
+	                // close
+	                case 'L':{
+	                    if (verbose_flag)
+	                        printf("--close %s\n", optarg);
+	                    if (!isNumber(optarg)){
+	                        fprintf(stderr, "error: close requires an integer argument");
+	                        exit(EXIT_FAILURE);
+	                    }
+	                    close_fd = atoi(optarg);
+	                    if (close_fd > fd_ind){
+	                        fprintf(stderr, "error: the entered file descriptor number is invalid");
+	                        exit(EXIT_FAILURE);
+	                    }
+	                    close(fd[close_fd]);
+	                    fd[close_fd] = -1;
+	                    
+	                    break;
+	                }
+	                // abort
+	                case 'A':{
+	                    if (verbose_flag)
+	                        printf("--abort\n");
+	                    raise(SIGSEGV);
+	                    break;
+	                }
+	                // catch
+	                case 'T':{
+	                    if (verbose_flag) {
+	                        printf("--catch %s\n", optarg);
+	                    }
+	                    catch_sig = atoi(optarg);
+	                    if (!isNumber(optarg) || catch_sig < 0){
+	                        fprintf(stderr, "error: catch requires a valid integer argument");
+	                        continue;
+	                    }
+	                    sa.sa_handler = catch_handler;
+	                    sigemptyset(&sa.sa_mask);
+	                    sa.sa_flags = SA_SIGINFO;
+	                    
+	                    if (sigaction(catch_sig, &sa, NULL) < 0){
+	                        /*handle error*/
+	                        fprintf(stderr, "error: fail to handle signal catch %d.\n",catch_sig);
+	                        exit(EXIT_FAILURE);
+	                    }
+	                    
+	                    break;
+	                }
+	                // ignore
+	                case 'i':{
+	                    ignore_sig = atoi(optarg);
+	                    if (verbose_flag) {
+	                        printf("--ignore %s\n", optarg);
+	                    }
+	                    if (!isNumber(optarg) || ignore_sig < 0){
+	                        fprintf(stderr, "error: ignore requires a valid integer argument");
+	                        continue;
+	                    }
+	                    
+	                    sa.sa_sigaction = &ignore_handler;
+	                    sa.sa_flags = SA_SIGINFO;
+	                    
+	                    if (sigaction(ignore_sig, &sa, NULL) < 0){
+	                        /*handle error*/
+	                        fprintf(stderr, "error: fail to ignore signal %d.\n",ignore_sig);
+	                        exit(EXIT_FAILURE);
+	                    }
+	                    break;
+	                }
+	                // default
+	                case 'f':{
+	                    default_sig = atoi(optarg);
+	                    if (verbose_flag) {
+	                        printf("--default %s\n", optarg);
+	                    }
+	                    if (!isNumber(optarg) || default_sig < 0){
+	                        fprintf(stderr, "error: default requires a valid integer argument");
+	                        continue;
+	                    }
+	                    if (signal(default_sig, SIG_DFL) < 0){
+	                        /* Handle error */
+	                        fprintf(stderr, "error: fail to handle signal %d with default\n", default_sig);
+	                        exit(EXIT_FAILURE);
+	                        break;
+	                    }
+	                    break;
+	                }
+	                // pause
+	                case 'P':{
+	                    if (verbose_flag) {
+	                        printf("--pause %s\n", optarg);
+	                    }
+	                    pause();
+	                    break;
+	                }
+					case '?':{
+						fprintf(stderr, "error: option not recognized or no option argument found\n");
+						break;
+					}
+				}
+
+				//move to next option
+				while((optind != argc) && !isAnOption(argv[optind]))
+					optind++;
+				curr_optind = optind;
+				curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
+				next_optind = optind;
+			} while(curr_opt != -1);
 		}
-	}
 
-  return return_val;
+		for(int i = 0; i < fd_ind; i++){
+        	if (fd[i] != -1){
+        	    if(close(fd[i]) != 0){
+        	        fprintf(stderr, "error: could not close file at logical index %d\n", i);
+        	        exit(EXIT_FAILURE);
+        	    }
+			}
+		}
+
+	return return_val;
 }

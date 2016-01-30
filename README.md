@@ -21,6 +21,8 @@ status of child process with WNOHANG without "actually waiting" for any process 
 
 6. In the Makefile, we use the -std=gnu11 to compile our source file
 
-7. We assumed that the usage of threads are not allowed in the simpsh program, to make the signal handling easier in this case.
+7. We assumed that the usage of threads are not allowed in the simpsh program, to make the signal handling easier in this case
 
-8. For the implementation of the --ignore option, we increment the instruction pointer %rip to avoid the infinite loop as a result of SIGSEGV.
+8. For the implementation of the --ignore option, we increment the instruction pointer %rip to avoid the infinite loop as a result of SIGSEGV
+
+9. --wait shoudl only wait on the previous commands
