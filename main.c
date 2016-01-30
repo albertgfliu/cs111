@@ -23,6 +23,7 @@
 static int verbose_flag;
 static int wait_flag;
 static int fd[1000];
+static int fd_pipe[1000];
 static int pipe_fd[2];
 static int close_fd;
 static int catch_sig;
@@ -312,6 +313,9 @@ int main(int argc, char **argv){
                         exit(errno);
 					}
 					fd[fd_ind++] = temp_fd;
+                    fd_pipe[fd_ind] = 0;
+                    
+                    /*clean oflags*/
                     oflags = 0;
                     
 					break;
@@ -326,8 +330,12 @@ int main(int argc, char **argv){
                     if(pipe(pipe_fd) == -1){
                         fprintf(stderr, "error: failure to create a pipe\n");
                     }
+                    
+                    /*identify pipe file descriptors to the pipe array*/
                     fd[fd_ind++] = pipe_fd[0];
+                    fd_pipe[fd_ind] = 1;
                     fd[fd_ind++] = pipe_fd[1];
+                    fd_pipe[fd_ind] = 1;
                     
                     break;
                 }
@@ -375,14 +383,40 @@ int main(int argc, char **argv){
 						c_pid = fork();
 						if(c_pid == 0){	
 							
+                            /*close unused side of the pipe*/
+                            if (fd_pipe[cmd_fd[0]])
+                                close(fd[cmd_fd[0]+1]);
+                            if (fd_pipe[cmd_fd[1]])
+                                close(fd[cmd_fd[1]-1]);
+                            if (fd_pipe[cmd_fd[2]])
+                                close(fd[cmd_fd[2]-1]);
+                            
+                            /*direct file descriptors*/
 							dup2(fd[cmd_fd[0]], STDIN_FILENO);
 							dup2(fd[cmd_fd[1]], STDOUT_FILENO);
 							dup2(fd[cmd_fd[2]], STDERR_FILENO);
+
+                            /*execute command*/
 							if(execvp(cmd[0], cmd) == -1){
 								fprintf(stderr, "error: command failed");
 							}
 						}
 						else if(c_pid > 0){
+                            
+                            /*close unused side of the pipe*/
+                            if (fd_pipe[cmd_fd[0]]){
+                                close(fd[cmd_fd[0]]);
+                                fd[cmd_fd[0]] = -1;
+                            }
+                            if (fd_pipe[cmd_fd[1]]){
+                                close(fd[cmd_fd[1]]);
+                                fd[cmd_fd[1]] = -1;
+                            }
+                            if (fd_pipe[cmd_fd[2]]){
+                                close(fd[cmd_fd[2]]);
+                                fd[cmd_fd[2]] = -1;
+                            }
+                            
 							int status;
 							waitpid(c_pid, &status, 0);
 							int exit_status = WEXITSTATUS(status);
@@ -521,9 +555,11 @@ int main(int argc, char **argv){
 	}
 
 	for(int i = 0; i < fd_ind; i++){
-		if(close(fd[i]) != 0){
-			fprintf(stderr, "error: could not close file at logical index %d\n", i);
-            exit(EXIT_FAILURE);
+        if (fd[i] != -1){
+            if(close(fd[i]) != 0){
+                fprintf(stderr, "error: could not close file at logical index %d\n", i);
+                exit(EXIT_FAILURE);
+            }
 		}
 	}
 

@@ -91,4 +91,15 @@ else
 	echo "Test 10 success"
 fi
 
+#test --pipe option
+echo "./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --command 1 3 4 tr A-Z a-z"
+./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --command 1 3 4 tr A-Z a-z
+if [ $? -ne 0 ]; then
+	echo "Test 11 had errors "
+else
+	echo "Test 11 success"
+fi
+
+
+
 
