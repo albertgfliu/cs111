@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <ucontext.h>
+#include <sys/time.h>
 #include <sys/resource.h>
 
 //defines
@@ -39,7 +40,6 @@ static int cmd_fd[3];
 char *cmd[cmd_size];
 static int return_val;
 const mode_t mode = 0644;
-struct rusage usage;
 
 static int wait_info_ind;
 struct wait_info{
@@ -48,6 +48,11 @@ struct wait_info{
 };
 
 struct wait_info wait_infos[100];
+
+/*getrusage*/
+struct rusage usage;
+struct timeval ru_utime_prev;
+struct timeval ru_stime_prev;
 
 /*Helper Functions*/
 int isAnOption(char *cstring){
@@ -106,25 +111,25 @@ int main(int argc, char **argv){
         {"trunc",       no_argument, 0,    't'},
         
         /*file opening options*/
-	{"rdonly",      required_argument,	0, 	'r'},
-	{"wronly",      required_argument,	0,	'w'},
+        {"rdonly",      required_argument,	0, 	'r'},
+        {"wronly",      required_argument,	0,	'w'},
         {"rdwr",        required_argument,  0,  'R'},
         {"pipe",        no_argument,		0, 	'p'},
 
         /*subcommand options*/
-	{"command",     required_argument,	0,	'c'},
+        {"command",     required_argument,	0,	'c'},
         {"wait",        no_argument, &wait_flag, 1},
         
         /*miscellaneous options*/
         {"close",       required_argument,	0,	'L'},
         {"verbose",     no_argument, &verbose_flag, 1},
-	{"profile", 	no_argument, &profile_flag, 1},
+        {"profile", 	no_argument, &profile_flag, 1},
         {"abort",       no_argument,        0,  'A'},
         {"catch",       required_argument,	0,	'T'},
         {"ignore",      required_argument,	0,	'i'},
         {"default",     required_argument,	0,	'f'},
         {"pause",       no_argument,        0,	'P'},
-	{0,             0,                  0,	0}
+        {0,             0,                  0,	0}
 	};
 	
 	int long_opts_ind;
@@ -154,6 +159,10 @@ int main(int argc, char **argv){
 	curr_optind = optind;
 	curr_opt = getopt_long(argc, argv, "", long_opts, &long_opts_ind);
 	next_optind = optind;
+
+
+
+
 	if(curr_opt == -1){
 		fprintf(stderr, "error: no options found\n");
 	}
@@ -166,6 +175,18 @@ int main(int argc, char **argv){
 			//printf("curr_optind = %d | curr_opt = %c | next_optind = %d\n", curr_optind, curr_opt, next_optind);
 			//printf("argv[%d] = %s\n", next_optind, argv[next_optind]);
 			//printf("optopt = %d\n", optopt);
+
+            if(getrusage(RUSAGE_SELF, &usage) == -1){
+                //then we have an error. Do something about it.
+            }
+            else{
+                //set the values of ru_utime_prev and ru_stime_prev
+                ru_utime_prev.tv_sec = usage.ru_utime.tv_sec;
+                ru_utime_prev.tv_usec = usage.ru_utime.tv_usec;
+
+                ru_stime_prev.tv_sec = usage.ru_stime.tv_sec;
+                ru_stime_prev.tv_usec = usage.ru_stime.tv_usec;
+            }
 	
 			switch(curr_opt){
                	// append
@@ -591,6 +612,22 @@ int main(int argc, char **argv){
 						break;
 					}
 				}
+
+
+
+
+                if(profile_flag){
+                    //do a round of getrusage
+                    if(getrusage(RUSAGE_SELF, &usage) == -1){
+                        //then we have an error. Do something about it.
+                    }
+                    else{
+                        //set the values of ru_utime_prev and ru_stime_prev
+                        double user_time = ((double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000)-((double)ru_utime_prev.tv_sec + (double)ru_utime_prev.tv_usec/1000000);
+                        double system_time = ((double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000)-((double)ru_stime_prev.tv_sec + (double)ru_stime_prev.tv_usec/1000000);
+                        printf("Command User Run Time: %f s \n Command System Run Time: %f s \n", user_time, system_time);
+                    }
+                }
 
 				//move to next option
 				while((optind != argc) && !isAnOption(argv[optind]))
