@@ -1,11 +1,11 @@
 #CPP is g++ compiler
 C = gcc
 
-#g++ compiler options
+#gcc compiler options
 #	-c prevents linking
 #	-std=c++11 allows <unordered_set> to be used
 #	-I . specifies header file locations
-CFLAGS = -c -std=gnu11
+CFLAGS = -c -std=c99
 HDRLOC = -I .
 
 #make targets
