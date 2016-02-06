@@ -29,6 +29,7 @@ static int wait_flag;
 static int profile_flag;
 
 /*temporary storage*/
+static int pid_child[1000];
 static int fd[1000];
 static int fd_pipe[1000];
 static int pipe_fd[2];
@@ -41,7 +42,6 @@ char *cmd[cmd_size];
 static int return_val;
 const mode_t mode = 0644;
 
-static int wait_info_ind;
 struct wait_info{
     pid_t wait_pid;
     char *wait_cmd[cmd_size];
@@ -163,7 +163,7 @@ int main(int argc, char **argv){
 
         /*subcommand options*/
         {"command",     required_argument,  0,          'c'},
-        {"wait",        no_argument,        &wait_flag, 1},
+        {"wait",        no_argument,        0,          'W'},
         
         /*miscellaneous options*/
         {"close",       required_argument,  0,  'L'},
@@ -184,8 +184,10 @@ int main(int argc, char **argv){
     int oflags = 0;
     char *option;
     
+    int pid_child_ind = 0;
     int fd_ind = 0;
     int cmd_ind = 0;
+    int wait_info_ind = 0;
 
     verbose_flag = 0;
     wait_flag = 0;
@@ -448,12 +450,16 @@ int main(int argc, char **argv){
         
                         while((next_optind != argc) && !isAnOption(argv[next_optind])){
                             char *char_ptr = malloc(sizeof(argv[next_optind]));
+                            char *wait_cmd_ptr = malloc(sizeof(argv[next_optind]));
                             //printf("%d ", (int)sizeof(argv[next_optind]));
                             cmd[cmd_ind] = char_ptr;
+                            wait_infos[wait_info_ind].wait_cmd[cmd_ind] = wait_cmd_ptr;
                             strcpy(cmd[cmd_ind], argv[next_optind]);
+                            strcpy(wait_infos[wait_info_ind].wait_cmd[cmd_ind], argv[next_optind]);
                             cmd_ind++;
                             next_optind++;
                         }
+                        
                         if(verbose_flag){
                             printf("--command");
                             for(int i = 0; i < 3; i++){
@@ -490,6 +496,10 @@ int main(int argc, char **argv){
                         }
                         else if(c_pid > 0){
                             
+                            pid_child[pid_child_ind] = c_pid;
+                            pid_child_ind++;
+                            wait_infos[wait_info_ind].wait_pid = c_pid;
+
                             /*close unused side of the pipe*/
                             if (fd_pipe[cmd_fd[0]]){
                                 close(fd[cmd_fd[0]]);
@@ -503,21 +513,6 @@ int main(int argc, char **argv){
                                 close(fd[cmd_fd[2]]);
                                 fd[cmd_fd[2]] = -1;
                             }
-                            
-                            int status;
-                            waitpid(c_pid, &status, 0);
-                            int exit_status = WEXITSTATUS(status);
-                            if(wait_flag){
-                                printf("%d", exit_status);
-                                for(int i = 0; i < cmd_size; i++){
-                                    if(cmd[i] != NULL){
-                                        printf(" %s", cmd[i]);
-                                    }
-                                }
-                                printf("\n");
-                            }
-                            if(exit_status > return_val)
-                                return_val = exit_status;
                         }
                         else { //couldn't create child process
                             fprintf(stderr, "error: could not create child process\n");
@@ -526,7 +521,9 @@ int main(int argc, char **argv){
                         for(int i = 0; i < cmd_size; i++)
                             free(cmd[i]);
                     }
-
+                    
+                    wait_info_ind++;
+                    
                     if (profile_flag){
                         print_usage(RUSAGE_SELF);
                     }
@@ -534,42 +531,37 @@ int main(int argc, char **argv){
                     break;
                 }
 
-                // //wait
-                // case 'W':{
-                //     if (verbose_flag)
-                //         printf("--wait\n");
+                //wait
+                case 'W':{
+                    if (verbose_flag)
+                        printf("--wait\n");
                     
-                //     pid_t returnedPid;
-                //     int status;
-                //     int exit_status;
-                //     int i;
+                    int status;
+                    int exit_status;
 
-                //     while((returnedPid = waitpid(-1, &status, 0) )!= -1){
-                //         exit_status = WEXITSTATUS(status);
-
-
-                //         /*print out exit status*/
-                //         printf("%d", exit_status);
+                    for (int i = 0; i < wait_info_ind; i++) {
+                        exit_status = waitpid(-1, &status, 0);
+                        printf("%d ", status);
                         
-                //         if(exit_status > return_val)
-                //             return_val = exit_status;
-                //         // find the corresponding wait_info
-                //         for(i = 0 ; i != wait_info_ind; i++){
-                //             if(returnedPid == (wait_infos[i]).wait_pid)
-                //                 break;
-                //         }
-
-                //         /*print out the command*/
-                //         for(int j = 0; j < cmd_size; j++){
-                //             if(wait_infos[i].wait_cmd[j] != NULL){
-                //                 printf(" %s", wait_infos[i].wait_cmd[j]);
-                //             }
-                //         }
-                //         printf("\n");
-                //     }
+                        int j;
+                        for (j = 0; j < wait_info_ind; j++)
+                            if (exit_status == wait_infos[j].wait_pid)
+                                break;
+                        int k = 0;
+                        for (; wait_infos[j].wait_cmd[k]!= NULL; k++)
+                            printf("%s ", wait_infos[j].wait_cmd[k]);
+                        
+                        printf("\n");
+                    }
+                    if (profile_flag) {
+                        printf("Parent Usage:\n");
+                        print_usage(RUSAGE_SELF);
+                        printf("Children Usage:\n");
+                        print_usage(RUSAGE_CHILDREN);
+                    }
                     
-                //     break;
-                // }
+                    break;
+                }
 
                 // close
                 case 'L':{
@@ -694,42 +686,6 @@ int main(int argc, char **argv){
                 }
             }
 
-
-            if(wait_flag){
-                if (verbose_flag)
-                    printf("--wait\n");
-                
-                pid_t returnedPid;
-                int status;
-                int exit_status;
-                int i;
-
-                while((returnedPid = waitpid(-1, &status, 0) )!= -1){
-                    exit_status = WEXITSTATUS(status);
-
-
-                    /*print out exit status*/
-                    printf("%d", exit_status);
-                    
-                    if(exit_status > return_val)
-                        return_val = exit_status;
-                    // find the corresponding wait_info
-                    for(i = 0 ; i != wait_info_ind; i++){
-                        if(returnedPid == (wait_infos[i]).wait_pid)
-                            break;
-                    }
-
-                    /*print out the command*/
-                    for(int j = 0; j < cmd_size; j++){
-                        if(wait_infos[i].wait_cmd[j] != NULL){
-                            printf(" %s", wait_infos[i].wait_cmd[j]);
-                        }
-                    }
-                    printf("\n");
-                }
-                break;
-            }
-
             //move to next option
             while((optind != argc) && !isAnOption(argv[optind]))
                 optind++;
@@ -739,6 +695,7 @@ int main(int argc, char **argv){
         } while(curr_opt != -1);
     }
 
+    /*close all file descriptors that were opened*/
     for(int i = 0; i < fd_ind; i++){
         if (fd[i] != -1){
             if(close(fd[i]) != 0){
@@ -746,6 +703,22 @@ int main(int argc, char **argv){
                 exit(EXIT_FAILURE);
             }
         }
+    }
+    
+    int status;
+    for (int i = 0; i < pid_child_ind; i++){
+        waitpid(pid_child[i], &status, 0);
+        int exit_status = WEXITSTATUS(status);
+        
+    /*calculate the largest exit status*/
+    if(exit_status > return_val)
+        return_val = exit_status;
+    }
+    
+    /*free the memory allocated for --wait commnands and arguments*/
+    for (int i = 0; i < wait_info_ind; i++){
+        for (int j = 0; j < cmd_size; j++)
+            free(wait_infos[i].wait_cmd[j]);
     }
 
     return return_val;

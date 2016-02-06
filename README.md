@@ -1,6 +1,6 @@
-# UCLA CS 111 Winter 2016 Lab 1b - Simpleton Shell
+# UCLA CS 111 Winter 2016 Lab 1c - Simpleton Shell
 
-There are several things worth noting in our implementation of the simpsh, 1b:
+There are several things worth noting in our implementation of the simpsh, 1c:
 
 1. We made an assumption that the amount of file descriptors opened would not exceed 1000.
 
@@ -26,3 +26,7 @@ status of child process with WNOHANG without "actually waiting" for any process 
 8. For the implementation of the --ignore option, we increment the instruction pointer %rip to avoid the infinite loop as a result of SIGSEGV
 
 9. --wait shoudl only wait on the previous commands
+
+10. We assume the arguments to command will not exceed 100
+
+11. The number of pipes opened will not exceed 500.
