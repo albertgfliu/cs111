@@ -2,7 +2,7 @@
 
 #put test cases here
 touch a b c d
-echo "Hellen apple ZEBRA">a
+base64 /dev/urandom | head -c 10000000 > a
 
 #test file flag options
 echo "./simpsh --creat a"
@@ -65,9 +65,9 @@ else
 fi
 
 #test --close option
-echo "./simpsh --rdonly a --wronly b --close 1 --wronly c --command 0 1 2 cat"
-./simpsh --rdonly a --wronly b --close 1 --wronly c --command 0 1 2 cat
-if [ $? -eq 0 ]; then
+echo "./simpsh --rdonly a --wronly b --wronly c --close 2 --command 0 1 2 cat"
+./simpsh --rdonly a --wronly b --close 2 --wronly c --command 0 1 2 cat
+if [ $? -ne 0 ]; then
 	echo "Test 8 had errors "
 else
 	echo "Test 8 success"
@@ -104,7 +104,7 @@ fi
 #test --wait option
 echo "./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --command 1 3 4 tr A-Z a-z --wait"
 ./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --command 1 3 4 tr A-Z a-z --wait
-if [ $? -ne 0 ]; then
+if [ $? -eq 0 ]; then
 	echo "Test 12 had errors "
 else
 	echo "Test 12 success"
@@ -113,7 +113,7 @@ fi
 #test --profile option
 echo "./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --profile --command 1 3 4 tr A-Z a-z --wait"
 ./simpsh --rdonly a --pipe --creat --trunc --wronly c --creat --wronly d --command 0 2 4 sort --profile --command 1 3 4 tr A-Z a-z --wait
-if [ $? -ne 0 ]; then
+if [ $? -eq 0 ]; then
 	echo "Test 13 had errors "
 else
 	echo "Test 13 success"

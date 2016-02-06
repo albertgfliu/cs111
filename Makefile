@@ -22,6 +22,7 @@ clean:
 
 check:
 	./test.sh
+	./test_execline.sh
 
 dist:
 	make check
