@@ -79,19 +79,42 @@ int isNumber(char *string){
 void print_usage(int who)
 {
     if (getrusage(who, &usage) < 0) {
-        fprintf(stderr, "error: cannot get the usage informations\n");
+        fprintf(stderr, "error: cannot get usage information\n");
         exit(errno);
     }
     else {
-        printf("\tUser time:\t\t\t%lld seconds\n", (long long) usage.ru_utime.tv_sec);
-        printf("\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_utime.tv_usec);
-        printf("\tSystem time:\t\t\t%lld seconds\n", (long long) usage.ru_stime.tv_sec);
-        printf("\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_stime.tv_usec);
-        printf("\tMax resident set size:\t\t%ld\n", usage.ru_maxrss);
-        printf("\tSoft page faults:\t\t%ld\n", usage.ru_minflt);
-        printf("\tHard page faults:\t\t%ld\n", usage.ru_majflt);
-        printf("\tVoluntary context switches:\t%ld\n", usage.ru_nvcsw);
-        printf("\tInvoluntary context switches:\t%ld\n", usage.ru_nivcsw);
+
+        double usertime = ((double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000) - prev_usertime;
+        double systemtime = ((double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000) - prev_systemtime;
+        printf("\tLast Option Usage Statistics:\n");
+        printf("\t\tUser time:\t\t\t%f seconds\n", usertime);
+        printf("\t\tSystem time:\t\t\t%f seconds\n", systemtime);
+            /*
+            if(profile_flag){
+                //do a round of getrusage
+                if(getrusage(RUSAGE_SELF, &usage) == -1){
+                    //then we have an error. Do something about it.
+                }
+                else{
+                    //set the values of ru_utime_prev and ru_stime_prev
+
+        double usertime = ((double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000) - prev_usertime;
+        double systemtime = ((double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000) - prev_systemtime;
+                    printf("Command User Run Time: %f s \nCommand System Run Time: %f s \n", usertime, systemtime);
+                }
+            }
+             */
+        printf("\tTotal Usage Statistics:\n");
+        printf("\t\tUser time:\t\t\t%lld seconds\n", (long long) usage.ru_utime.tv_sec);
+        printf("\t\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_utime.tv_usec);
+        printf("\t\tSystem time:\t\t\t%lld seconds\n", (long long) usage.ru_stime.tv_sec);
+        printf("\t\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_stime.tv_usec);
+        printf("\t\tMax resident set size:\t\t%ld\n", usage.ru_maxrss);
+        printf("\t\tSoft page faults:\t\t%ld\n", usage.ru_minflt);
+        printf("\t\tHard page faults:\t\t%ld\n", usage.ru_majflt);
+        printf("\t\tVoluntary context switches:\t%ld\n", usage.ru_nvcsw);
+        printf("\t\tInvoluntary context switches:\t%ld\n", usage.ru_nivcsw);
+        printf("\n");
     }
 }
 
@@ -108,7 +131,7 @@ void ignore_handler(int sig, siginfo_t *si, void *arg){
 }
 
 void pause_handler(int sig, siginfo_t *si, void *arg){
-    fprintf(stderr, "error: fail to pause");
+    fprintf(stderr, "error: fail to pause\n");
     exit(EXIT_FAILURE);
 }
 
@@ -197,15 +220,17 @@ int main(int argc, char **argv){
             //printf("curr_optind = %d | curr_opt = %c | next_optind = %d\n", curr_optind, curr_opt, next_optind);
             //printf("argv[%d] = %s\n", next_optind, argv[next_optind]);
             //printf("optopt = %d\n", optopt);
+            if(profile_flag){
+                if(getrusage(RUSAGE_SELF, &usage) == -1){
+                    fprintf(stderr, "error: cannot get the usage informations\n");
+                }
+                else{
+                    //set the values of ru_utime_prev and ru_stime_prev
+                    prev_usertime = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000;
+                    prev_systemtime = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000;
+                } 
+            }
 
-            if(getrusage(RUSAGE_SELF, &usage) == -1){
-                //then we have an error. Do something about it.
-            }
-            else{
-                //set the values of ru_utime_prev and ru_stime_prev
-                prev_usertime = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000;
-                prev_systemtime = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000;
-            }
     
             switch(curr_opt){
                 // append
@@ -460,7 +485,7 @@ int main(int argc, char **argv){
 
                             /*execute command*/
                             if(execvp(cmd[0], cmd) == -1){
-                                fprintf(stderr, "error: command failed");
+                                fprintf(stderr, "error: command failed\n");
                             }
                         }
                         else if(c_pid > 0){
@@ -551,12 +576,12 @@ int main(int argc, char **argv){
                     if (verbose_flag)
                         printf("--close %s\n", optarg);
                     if (!isNumber(optarg)){
-                        fprintf(stderr, "error: close requires an integer argument");
+                        fprintf(stderr, "error: close requires an integer argument\n");
                         exit(EXIT_FAILURE);
                     }
                     close_fd = atoi(optarg);
                     if (close_fd > fd_ind){
-                        fprintf(stderr, "error: the entered file descriptor number is invalid");
+                        fprintf(stderr, "error: the entered file descriptor number is invalid\n");
                         exit(EXIT_FAILURE);
                     }
                     close(fd[close_fd]);
@@ -582,7 +607,7 @@ int main(int argc, char **argv){
                     }
                     catch_sig = atoi(optarg);
                     if (!isNumber(optarg) || catch_sig < 0){
-                        fprintf(stderr, "error: catch requires a valid integer argument");
+                        fprintf(stderr, "error: catch requires a valid integer argument\n");
                         continue;
                     }
                     sa.sa_handler = catch_handler;
@@ -608,7 +633,7 @@ int main(int argc, char **argv){
                         printf("--ignore %s\n", optarg);
                     }
                     if (!isNumber(optarg) || ignore_sig < 0){
-                        fprintf(stderr, "error: ignore requires a valid integer argument");
+                        fprintf(stderr, "error: ignore requires a valid integer argument\n");
                         continue;
                     }
                     
@@ -634,7 +659,7 @@ int main(int argc, char **argv){
                         printf("--default %s\n", optarg);
                     }
                     if (!isNumber(optarg) || default_sig < 0){
-                        fprintf(stderr, "error: default requires a valid integer argument");
+                        fprintf(stderr, "error: default requires a valid integer argument\n");
                         continue;
                     }
                     if (signal(default_sig, SIG_DFL) < 0){
@@ -705,21 +730,6 @@ int main(int argc, char **argv){
                 break;
             }
 
-            /*
-            if(profile_flag){
-                //do a round of getrusage
-                if(getrusage(RUSAGE_SELF, &usage) == -1){
-                    //then we have an error. Do something about it.
-                }
-                else{
-                    //set the values of ru_utime_prev and ru_stime_prev
-
-                    double usertime = ((double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000) - prev_usertime;
-                    double systemtime = ((double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000) - prev_systemtime;
-                    printf("Command User Run Time: %f s \nCommand System Run Time: %f s \n", usertime, systemtime);
-                }
-            }
-             */
             //move to next option
             while((optind != argc) && !isAnOption(argv[optind]))
                 optind++;
