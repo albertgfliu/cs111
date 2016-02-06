@@ -1,5 +1,7 @@
 # UCLA CS 111 Winter 2016 Lab 1c - Simpleton Shell
 
+NOTE: Concerning the make check scripts, there are differences between testing on the SEASnet Linux Servers and testing on our local machines. We corrected our implementation to be compatible with the Linux Servers so they may not run correctly on our local machines.
+
 There are several things worth noting in our implementation of the simpsh, 1c:
 
 1. We made an assumption that the amount of file descriptors opened would not exceed 1000.
