@@ -76,6 +76,26 @@ int isNumber(char *string){
     }
 }
 
+void print_usage(int who)
+{
+    if (getrusage(who, &usage) < 0) {
+        fprintf(stderr, "error: cannot get the usage informations\n");
+        exit(errno);
+    }
+    else {
+        printf("\tUser time:\t\t\t%lld seconds\n", (long long) usage.ru_utime.tv_sec);
+        printf("\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_utime.tv_usec);
+        printf("\tSystem time:\t\t\t%lld seconds\n", (long long) usage.ru_stime.tv_sec);
+        printf("\t\t\t\t\t%lld microseconds\n", (long long) usage.ru_stime.tv_usec);
+        printf("\tMax resident set size:\t\t%ld\n", usage.ru_maxrss);
+        printf("\tSoft page faults:\t\t%ld\n", usage.ru_minflt);
+        printf("\tHard page faults:\t\t%ld\n", usage.ru_majflt);
+        printf("\tVoluntary context switches:\t%ld\n", usage.ru_nvcsw);
+        printf("\tInvoluntary context switches:\t%ld\n", usage.ru_nivcsw);
+    }
+}
+
+// Signal Handlers
 void catch_handler(int sig){
     fprintf(stderr, "error: signal %d caught\n", sig);
     exit(sig);
@@ -91,6 +111,8 @@ void pause_handler(int sig, siginfo_t *si, void *arg){
     fprintf(stderr, "error: fail to pause");
     exit(EXIT_FAILURE);
 }
+
+
 
 //main function
 int main(int argc, char **argv){
@@ -346,8 +368,14 @@ int main(int argc, char **argv){
                     fd[fd_ind++] = temp_fd;
                     fd_pipe[fd_ind] = 0;
                     
+                    
+                    
                     /*clean oflags*/
                     oflags = 0;
+                    
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
                     break;
                     
                 // pipe
@@ -367,6 +395,10 @@ int main(int argc, char **argv){
                     fd_pipe[fd_ind] = 1;
                     fd[fd_ind++] = pipe_fd[1];
                     fd_pipe[fd_ind] = 1;
+                    
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
                     
                     break;
                 }
@@ -470,6 +502,10 @@ int main(int argc, char **argv){
                             free(cmd[i]);
                     }
 
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
 
@@ -526,6 +562,10 @@ int main(int argc, char **argv){
                     close(fd[close_fd]);
                     fd[close_fd] = -1;
                     
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
                 // abort
@@ -555,6 +595,10 @@ int main(int argc, char **argv){
                         exit(EXIT_FAILURE);
                     }
                     
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
                 // ignore
@@ -576,6 +620,11 @@ int main(int argc, char **argv){
                         fprintf(stderr, "error: fail to ignore signal %d.\n",ignore_sig);
                         exit(EXIT_FAILURE);
                     }
+                    
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
                 // default
@@ -594,6 +643,11 @@ int main(int argc, char **argv){
                         exit(EXIT_FAILURE);
                         break;
                     }
+                    
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
                 // pause
@@ -602,6 +656,11 @@ int main(int argc, char **argv){
                         printf("--pause %s\n", optarg);
                     }
                     pause();
+                    
+                    if (profile_flag){
+                        print_usage(RUSAGE_SELF);
+                    }
+                    
                     break;
                 }
                 case '?':{
@@ -646,7 +705,7 @@ int main(int argc, char **argv){
                 break;
             }
 
-
+            /*
             if(profile_flag){
                 //do a round of getrusage
                 if(getrusage(RUSAGE_SELF, &usage) == -1){
@@ -660,7 +719,7 @@ int main(int argc, char **argv){
                     printf("Command User Run Time: %f s \nCommand System Run Time: %f s \n", usertime, systemtime);
                 }
             }
-
+             */
             //move to next option
             while((optind != argc) && !isAnOption(argv[optind]))
                 optind++;
